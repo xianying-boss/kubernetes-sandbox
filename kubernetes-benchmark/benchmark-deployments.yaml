@@ -1,0 +1,163 @@
+# Benchmark Deployments for Performance Testing
+# Deploy these to continuously monitor runtime performance
+
+---
+# Default runtime (runc) benchmark
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchmark-runc
+  namespace: default
+  labels:
+    app: benchmark
+    runtime: runc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: benchmark
+      runtime: runc
+  template:
+    metadata:
+      labels:
+        app: benchmark
+        runtime: runc
+    spec:
+      # No runtimeClassName = default runc
+      containers:
+      - name: sysbench
+        image: ubuntu:22.04
+        command:
+        - /bin/bash
+        - -c
+        - |
+          apt-get update && apt-get install -y sysbench stress-ng
+          echo "Starting continuous benchmark for runc..."
+          while true; do
+            echo "=== CPU Test ==="
+            sysbench cpu --cpu-max-prime=20000 --threads=1 run
+            echo "=== Memory Test ==="
+            sysbench memory --memory-block-size=1M --memory-total-size=1G run
+            echo "=== Sleeping 60s ==="
+            sleep 60
+          done
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+
+---
+# gVisor benchmark
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchmark-gvisor
+  namespace: default
+  labels:
+    app: benchmark
+    runtime: gvisor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: benchmark
+      runtime: gvisor
+  template:
+    metadata:
+      labels:
+        app: benchmark
+        runtime: gvisor
+    spec:
+      runtimeClassName: gvisor
+      containers:
+      - name: sysbench
+        image: ubuntu:22.04
+        command:
+        - /bin/bash
+        - -c
+        - |
+          apt-get update && apt-get install -y sysbench stress-ng
+          echo "Starting continuous benchmark for gVisor..."
+          while true; do
+            echo "=== CPU Test ==="
+            sysbench cpu --cpu-max-prime=20000 --threads=1 run
+            echo "=== Memory Test ==="
+            sysbench memory --memory-block-size=1M --memory-total-size=1G run
+            echo "=== Sleeping 60s ==="
+            sleep 60
+          done
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+
+---
+# Kata benchmark
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchmark-kata
+  namespace: default
+  labels:
+    app: benchmark
+    runtime: kata
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: benchmark
+      runtime: kata
+  template:
+    metadata:
+      labels:
+        app: benchmark
+        runtime: kata
+    spec:
+      runtimeClassName: kata
+      containers:
+      - name: sysbench
+        image: ubuntu:22.04
+        command:
+        - /bin/bash
+        - -c
+        - |
+          apt-get update && apt-get install -y sysbench stress-ng
+          echo "Starting continuous benchmark for Kata..."
+          while true; do
+            echo "=== CPU Test ==="
+            sysbench cpu --cpu-max-prime=20000 --threads=1 run
+            echo "=== Memory Test ==="
+            sysbench memory --memory-block-size=1M --memory-total-size=1G run
+            echo "=== Sleeping 60s ==="
+            sleep 60
+          done
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+
+---
+# Service to expose metrics (optional)
+apiVersion: v1
+kind: Service
+metadata:
+  name: benchmark-metrics
+  labels:
+    app: benchmark
+spec:
+  selector:
+    app: benchmark
+  ports:
+  - port: 9100
+    targetPort: 9100
+    name: metrics
+  type: ClusterIP
