@@ -1,0 +1,287 @@
+# Example Pods and Deployments using gVisor and Kata Containers
+
+---
+# Simple gVisor Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gvisor-test-pod
+  labels:
+    app: test
+    runtime: gvisor
+spec:
+  runtimeClassName: gvisor
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+
+---
+# Simple Kata Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kata-test-pod
+  labels:
+    app: test
+    runtime: kata
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "200m"
+      limits:
+        memory: "256Mi"
+        cpu: "500m"
+
+---
+# gVisor Deployment with Python Agent
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gvisor-agent-deployment
+  labels:
+    app: agent
+    runtime: gvisor
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: agent
+      runtime: gvisor
+  template:
+    metadata:
+      labels:
+        app: agent
+        runtime: gvisor
+    spec:
+      runtimeClassName: gvisor
+      containers:
+      - name: python-agent
+        image: python:3.11-slim
+        command: ["python", "-m", "http.server", "8080"]
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+
+---
+# Kata Deployment with Node.js application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kata-nodejs-deployment
+  labels:
+    app: nodejs-app
+    runtime: kata
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nodejs-app
+      runtime: kata
+  template:
+    metadata:
+      labels:
+        app: nodejs-app
+        runtime: kata
+    spec:
+      runtimeClassName: kata
+      containers:
+      - name: nodejs
+        image: node:18-alpine
+        command: ["node", "-e", "require('http').createServer((req,res)=>res.end('Hello from Kata')).listen(3000)"]
+        ports:
+        - containerPort: 3000
+          name: http
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# StatefulSet with gVisor for databases (example)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gvisor-redis
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      runtime: gvisor
+  template:
+    metadata:
+      labels:
+        app: redis
+        runtime: gvisor
+    spec:
+      runtimeClassName: gvisor
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+
+---
+# Job with Kata for batch processing
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kata-batch-job
+spec:
+  template:
+    metadata:
+      labels:
+        runtime: kata
+    spec:
+      runtimeClassName: kata
+      restartPolicy: Never
+      containers:
+      - name: processor
+        image: ubuntu:22.04
+        command: 
+        - /bin/bash
+        - -c
+        - |
+          echo "Starting batch processing in Kata VM..."
+          apt-get update && apt-get install -y stress-ng
+          stress-ng --cpu 2 --timeout 60s --metrics-brief
+          echo "Batch processing complete"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "2000m"
+
+---
+# CronJob with gVisor for scheduled tasks
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gvisor-backup-job
+spec:
+  schedule: "0 2 * * *"  # 2 AM daily
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            runtime: gvisor
+        spec:
+          runtimeClassName: gvisor
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: alpine:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Running backup at $(date)"
+              # Your backup logic here
+              echo "Backup complete"
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+
+---
+# Service for gVisor deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: gvisor-agent-service
+spec:
+  selector:
+    app: agent
+    runtime: gvisor
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: ClusterIP
+
+---
+# Service for Kata deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: kata-nodejs-service
+spec:
+  selector:
+    app: nodejs-app
+    runtime: kata
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  type: LoadBalancer

@@ -1,0 +1,41 @@
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata
+  labels:
+    app.kubernetes.io/name: kata-containers
+    app.kubernetes.io/component: runtime
+handler: kata
+overhead:
+  # Kata runs in a VM, so there's additional memory/CPU overhead
+  # Adjust these values based on your kata configuration
+  podFixed:
+    memory: "160Mi"
+    cpu: "250m"
+scheduling:
+  # Optional: Use node selectors to run only on nodes with KVM support
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+  # Optional: Tolerations for dedicated KVM nodes
+  tolerations:
+  - key: "sandbox"
+    operator: "Equal"
+    value: "kata"
+    effect: "NoSchedule"
+---
+# Alternative: RuntimeClass without overhead accounting
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata-simple
+handler: kata
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+---
+# Alternative: RuntimeClass without node restrictions
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata-unrestricted
+handler: kata
